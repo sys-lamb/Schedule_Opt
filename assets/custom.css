@@ -1,0 +1,64 @@
+#app-container * {
+  box-sizing: border-box;
+  -moz-box-sizing: border-box;
+}
+
+body {
+  background-color: #1e2130;
+  color: #f3f5f4;
+  font-family: "Open Sans", sans-serif;
+  width: 100%;
+  height: 100vh;
+  max-width: 100% !important;
+  overflow-x: hidden;
+  margin: 0;
+}
+
+#big-app-container {
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 6rem;
+}
+
+
+.header {
+  height: fit-content;
+  background-color: #1e2130;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #4B5460;
+  padding: 1rem 10rem;
+  width: 100%;
+}
+
+.header h5 {
+  font-family: 'Open Sans Semi Bold', sans-serif;
+  font-weight: 500;
+  line-height: 1.2;
+  font-size: 2rem;
+  letter-spacing: 0.1rem;
+  text-transform: uppercase;
+}
+
+.header h6 {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+
+#header-logo {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+
+.header Img {
+  height: 4rem;
+  margin: 0px 10px;
+}
