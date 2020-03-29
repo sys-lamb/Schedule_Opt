@@ -12,24 +12,52 @@ Created on Sat Feb 22 15:59:34 2020
 import os
 import pandas as pd
 import numpy as np
-import pandas as pd
 import pulp
 os.chdir('/Users/alexlamb/Desktop/Schedule_Opt/py')
-from helper import (generate_hours, 
+from helper import (generate_shifts,
                     generate_availability,
+                    generate_hours, 
                     generate_hourly_need)
 
 # =============================================================================
-# Main run
+# Initialized data
 # =============================================================================
 
 # Schedule start date and end date
 schedule_start = '2020-04-01'
 schedule_end = '2020-04-08'
+
+# Min and max shift length
+min_shift = 6
+max_shift = 9
+
+# Open and closed hours
+open_closed = pd.read_csv('../data/open_closed_sample.csv')
+open_closed = open_closed.melt('Type', var_name = 'day_of_week', value_name = 'hour')
+open_closed = open_closed.pivot('day_of_week', 'Type').reset_index(level=0)
+open_closed.columns = open_closed.columns.rename(['drop', 'type']).droplevel('drop')
+open_closed.columns = ['day_of_week', 'close', 'open']
+
 # Employee + labor need data
 employee_data = pd.read_csv('../data/employees.csv')
-availability_data = pd.read_csv('../data/availability.csv')
-laborhour_data = pd.read_csv('../data/labor_need.csv')
+avail_data = pd.read_csv('../data/availability.csv')
+labor = pd.read_csv('../data/labor_need.csv')
+
+# =============================================================================
+# Generate all possible shifts + availability
+# =============================================================================
+shifts = generate_shifts(schedule_start, schedule_end, min_shift, max_shift, open_closed)
+avail = generate_availability(shifts, avail_data, employee_data)
+
+
+
+
+
+
+
+# =============================================================================
+# Manipulate data
+# =============================================================================
 
 hours = generate_hours(schedule_start, schedule_end)
 hours_avail = generate_availability(hours, employee_data, availability_data)

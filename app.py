@@ -5,10 +5,10 @@ Created on Sun Mar  1 19:46:22 2020
 
 @author: root
 """
-
+from datetime import datetime as dt
+from datetime import timedelta
 import os
 import pathlib
-
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
@@ -16,6 +16,7 @@ from dash.dependencies import Input, Output, State
 import dash_table
 import plotly.graph_objs as go
 import dash_daq as daq
+import dash_table
 
 import pandas as pd
 
@@ -26,6 +27,9 @@ app = dash.Dash(
 server = app.server
 app.config["suppress_callback_exceptions"] = True
 
+dows = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+initial_hours = [['Open', '12am', '12am', '12am', '12am', '12am', '12am', '12am'], ['Close', '12pm', '12pm', '12pm', '12pm', '12pm', '12pm', '12pm']]
+initial_hours = pd.DataFrame(initial_hours, columns = dows)
 
 APP_PATH = str(pathlib.Path(__file__).parent.resolve())
 
@@ -38,7 +42,7 @@ def gen_header():
                 id="header-text",
                 children=[
                     html.H5("Schedule Optimization Software"),
-                    html.H6("Process Control and Exception Reporting"),
+                    html.H6("Input your employee information and get an optimized schedule!"),
                 ],
             ),
             html.Div(
@@ -82,20 +86,129 @@ def gen_tabs():
 
 def gen_input_tab():
     return [
+        # Manually select metrics
         html.Div(
             id="set-input-intro-container",
-            children=html.P(
-                "Am here.  Hi.  Tab 1."
-            ),
-        )]
+            # className='twelve columns',
+            children=[
+                html.Div(
+                    id='inputs',
+                    children = [
+                        html.Br(),
+                        html.P("What dates do you want a schedule for?"),
+                        dcc.DatePickerRange(
+                            id='schedule-date-range',
+                            min_date_allowed=dt(1995, 8, 5),
+                            max_date_allowed=dt(2030, 9, 19),
+                            initial_visible_month=dt(2020, 4, 1),
+                            end_date=dt(2020, 4, 7).date(),
+                            start_date=dt.today().date() + timedelta(7)
+                        ),
+                        html.Br(),
+                        html.Br(),
+                        html.P("How many hours can shifts be?"),
+                        dcc.RangeSlider(
+                            id='shift-lengths',
+                            marks={i: '{}'.format(i) for i in range(1, 13)},
+                            min=1,
+                            max=12,
+                            value=[6,8]
+                        ),
+                        html.Br(),
+                        html.P('Fill in your open hours below'),
+                        dash_table.DataTable(
+                            id='hours-table',
+                            columns=[{"name": i, "id": i} for i in initial_hours.columns],
+                            data=initial_hours.to_dict('records'),
+                            editable=True,
+                            style_header={'backgroundColor': '#1e2130'},
+                            style_cell={
+                                'backgroundColor': '#1e2130',
+                                'color': 'white'
+                            },
+                        ),
+                        html.Br(),
+
+                        html.Button(id='submit-button', n_clicks=0, children='Optimize me!'),
+                    ]),
+                    html.Div(
+                        id='uploads',
+                        children = [
+                            html.Br(),
+                            html.P('Upload your employee information below'),
+                            dcc.Upload(
+                                id='upload-info',
+                                children=html.Div([
+                                    'Drag and Drop or ',
+                                    html.A('Select Files')
+                                ]),
+                                style={
+                                    'width': '100%',
+                                    'height': '60px',
+                                    'lineHeight': '60px',
+                                    'borderWidth': '1px',
+                                    'borderStyle': 'dashed',
+                                    'borderRadius': '5px',
+                                    'textAlign': 'center',
+                                    'margin': '10px'
+                                },
+                                # Allow multiple files to be uploaded
+                                multiple=True
+                            ),
+                            html.Br(),
+                            html.P('Upload your employee availability below'),
+                            dcc.Upload(
+                                id='upload-availability',
+                                children=html.Div([
+                                    'Drag and Drop or ',
+                                    html.A('Select Files')
+                                ]),
+                                style={
+                                    'width': '100%',
+                                    'height': '60px',
+                                    'lineHeight': '60px',
+                                    'borderWidth': '1px',
+                                    'borderStyle': 'dashed',
+                                    'borderRadius': '5px',
+                                    'textAlign': 'center',
+                                    'margin': '10px'
+                                },
+                                # Allow multiple files to be uploaded
+                                multiple=True
+                            ),
+                            html.Br(), 
+                            html.P('Upload your labor need below'),
+                            dcc.Upload(
+                                id='upload-labor-need',
+                                children=html.Div([
+                                    'Drag and Drop or ',
+                                    html.A('Select Files')
+                                ]),
+                                style={
+                                    'width': '100%',
+                                    'height': '60px',
+                                    'lineHeight': '60px',
+                                    'borderWidth': '1px',
+                                    'borderStyle': 'dashed',
+                                    'borderRadius': '5px',
+                                    'textAlign': 'center',
+                                    'margin': '10px'
+                                },
+                                # Allow multiple files to be uploaded
+                                multiple=True
+                            ),
+                        ]),
+
+        ]),
+    ]
 
 def gen_output_tab():
     return [
         html.Div(
             id="set-output-intro-container",
-            children=html.P(
-                "Am here.  Hi.  Tab 2."
-            ),
+            children=[
+                html.P( "Am here.  Hi.  Tab 2."),
+            ]
         )]
 
 
