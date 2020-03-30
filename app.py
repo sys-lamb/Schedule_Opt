@@ -5,6 +5,10 @@ Created on Sun Mar  1 19:46:22 2020
 
 @author: root
 """
+
+# =============================================================================
+# Package imports
+# =============================================================================
 from datetime import datetime as dt
 from datetime import timedelta
 import os
@@ -17,7 +21,8 @@ import dash_table
 import plotly.graph_objs as go
 import dash_daq as daq
 import dash_table
-
+import requests 
+import io
 import pandas as pd
 
 app = dash.Dash(
@@ -33,6 +38,9 @@ initial_hours = pd.DataFrame(initial_hours, columns = dows)
 
 APP_PATH = str(pathlib.Path(__file__).parent.resolve())
 
+# =============================================================================
+# Layout generators
+# =============================================================================
 def gen_header():
     return html.Div(
         id="header",
@@ -101,8 +109,8 @@ def gen_input_tab():
                             min_date_allowed=dt(1995, 8, 5),
                             max_date_allowed=dt(2030, 9, 19),
                             initial_visible_month=dt(2020, 4, 1),
-                            end_date=dt(2020, 4, 7).date(),
-                            start_date=dt.today().date() + timedelta(7)
+                            end_date=dt.today().date() + timedelta(7),
+                            start_date=dt.today().date()
                         ),
                         html.Br(),
                         html.Br(),
@@ -128,8 +136,13 @@ def gen_input_tab():
                             },
                         ),
                         html.Br(),
-
-                        html.Button(id='submit-button', n_clicks=0, children='Optimize me!'),
+                        html.Button('What the fuck', id='fuck'),
+                        html.Button('Optimize me!', id='submit-button'),
+                        html.Div(
+                            id='button-output',
+                            children = [
+                                html.P('')
+                        ]),
                     ]),
                     html.Div(
                         id='uploads',
@@ -211,6 +224,9 @@ def gen_output_tab():
             ]
         )]
 
+# =============================================================================
+# App layout
+# =============================================================================
 
 app.layout = html.Div(
     id="big-app-container",
@@ -218,8 +234,8 @@ app.layout = html.Div(
         gen_header(),
         dcc.Interval(
             id="interval-component",
-            interval=2 * 1000,  # in milliseconds
-            n_intervals=50,  # start at batch 50
+            interval=2 * 1000,
+            n_intervals=50,  
             disabled=True,
         ),
         html.Div(
@@ -234,6 +250,9 @@ app.layout = html.Div(
     ],
 )
 
+# =============================================================================
+# Render callbacks
+# =============================================================================
 @app.callback(
     [Output("app-content", "children"), Output("interval-component", "n_intervals")],
     [Input("app-tabs", "value")],
@@ -242,8 +261,9 @@ app.layout = html.Div(
 def render_tab_content(tab_switch, stopped_interval):
     if tab_switch == "tab1":
         return gen_input_tab(), stopped_interval
-    return gen_output_tab(), stopped_interval
-    
+    if tab_switch == "tab2":
+        return gen_output_tab(), stopped_interval
+
 @app.callback(
     Output("n-interval-stage", "data"),
     [Input("app-tabs", "value")],
@@ -261,7 +281,69 @@ def update_interval_state(tab_switch, cur_interval, disabled, cur_stage):
         return cur_interval
     return cur_stage
 
+# =============================================================================
+# Submit optimization callbacks
+# =============================================================================
+@app.callback(
+    [Output("submit-output", "children")],
+    [Input("fuck", "n_clicks")]
+)
+def test(n_clicks):
+    print('clicked')
+    return [html.P(n_clicks)]
 
+# =============================================================================
+# @app.callback(
+#     [Output("submit-output", "children")],
+#     [Input("submit-button", "n_clicks")],
+#     [State("schedule-date-range", "start-date"),
+#      State("schedule-date-range", "end-date"),
+#      State("shift-lengths", "value"),
+#      State("hours-table", "rows"),
+#      State("upload-info", "contents"),
+#      State("upload-availability", "contents"),
+#      State("upload-labor-need", "contents"),],
+# )
+# def submit(n_clicks, start_date, end_date, shift_lengths, open_hours, 
+#                        emp_info, availability, labor_need):
+#     print('in submit')
+#     if n_clicks > 0:
+#         print('n_clicks')
+#         shift_lengths = pd.read_csv(io.StringIO(shift_lengths))
+#         availability = pd.read_csv(io.StringIO(availability))
+#         labor_need = pd.read_csv(io.StringIO(labor_need))
+#         
+#         print(shift_lengths)
+#         print(open_hours) 
+#         print(emp_info)
+#     
+#         # params & url 
+#         URL = "127.0.0.1:5001/optimize"
+#         HEADERS = {'Content-Type': 'application/json'}
+#         PARAMS = {'start_date': start_date,
+#                   'end_date': end_date,
+#                   'min_shift': shift_lengths[0],
+#                   'max_shift': shift_lengths[1]
+#         } 
+#           
+#         data = {'employee_data': employee_data.to_json(),
+#                 'avail_data': availability.to_json(),
+#                 'labor': labor_need.to_json(),
+#                 'open_closed': hours_table.json()
+#         }
+#         
+#         # sending get request and saving the response as response object 
+#         r = requests.get(url = URL, params = PARAMS, data=json.dumps(data)) 
+#           
+#         # extracting data in json format 
+#         if r.response == 201:
+#             return [html.P('Optimization submitted')]
+#         else:
+#             return [html.P('Didn\'t work')]
+#     else:
+#         return []
+# 
+# =============================================================================
 # Running the server
 if __name__ == "__main__":
-    app.run_server(debug=True, port=8050)
+    app.run_server(threaded=True, port=8050)
