@@ -23,6 +23,7 @@ import dash_daq as daq
 import dash_table
 import requests 
 import io
+import json
 import pandas as pd
 
 app = dash.Dash(
@@ -70,7 +71,7 @@ def gen_tabs():
         children=[
             dcc.Tabs(
                 id="app-tabs",
-                value="tab2",
+                value="tab1",
                 className="custom-tabs",
                 children=[
                     dcc.Tab(
@@ -136,7 +137,6 @@ def gen_input_tab():
                             },
                         ),
                         html.Br(),
-                        html.Button('What the fuck', id='fuck'),
                         html.Button('Optimize me!', id='submit-button'),
                         html.Div(
                             id='button-output',
@@ -166,7 +166,7 @@ def gen_input_tab():
                                     'margin': '10px'
                                 },
                                 # Allow multiple files to be uploaded
-                                multiple=True
+                                multiple=False
                             ),
                             html.Br(),
                             html.P('Upload your employee availability below'),
@@ -187,7 +187,7 @@ def gen_input_tab():
                                     'margin': '10px'
                                 },
                                 # Allow multiple files to be uploaded
-                                multiple=True
+                                multiple=False
                             ),
                             html.Br(), 
                             html.P('Upload your labor need below'),
@@ -208,7 +208,7 @@ def gen_input_tab():
                                     'margin': '10px'
                                 },
                                 # Allow multiple files to be uploaded
-                                multiple=True
+                                multiple=False
                             ),
                         ]),
 
@@ -285,65 +285,58 @@ def update_interval_state(tab_switch, cur_interval, disabled, cur_stage):
 # Submit optimization callbacks
 # =============================================================================
 @app.callback(
-    [Output("submit-output", "children")],
-    [Input("fuck", "n_clicks")]
+    [Output("button-output", "children")],
+    [Input("submit-button", "n_clicks")],
+    [State("schedule-date-range", "start-date"),
+      State("schedule-date-range", "end-date"),
+      State("shift-lengths", "value"),
+      State("hours-table", "rows"),
+      State("upload-info", "contents"),
+      State("upload-availability", "contents"),
+      State("upload-labor-need", "contents"),],
 )
-def test(n_clicks):
-    print('clicked')
-    return [html.P(n_clicks)]
-
-# =============================================================================
-# @app.callback(
-#     [Output("submit-output", "children")],
-#     [Input("submit-button", "n_clicks")],
-#     [State("schedule-date-range", "start-date"),
-#      State("schedule-date-range", "end-date"),
-#      State("shift-lengths", "value"),
-#      State("hours-table", "rows"),
-#      State("upload-info", "contents"),
-#      State("upload-availability", "contents"),
-#      State("upload-labor-need", "contents"),],
-# )
-# def submit(n_clicks, start_date, end_date, shift_lengths, open_hours, 
-#                        emp_info, availability, labor_need):
-#     print('in submit')
-#     if n_clicks > 0:
-#         print('n_clicks')
-#         shift_lengths = pd.read_csv(io.StringIO(shift_lengths))
-#         availability = pd.read_csv(io.StringIO(availability))
-#         labor_need = pd.read_csv(io.StringIO(labor_need))
-#         
-#         print(shift_lengths)
-#         print(open_hours) 
-#         print(emp_info)
-#     
-#         # params & url 
-#         URL = "127.0.0.1:5001/optimize"
-#         HEADERS = {'Content-Type': 'application/json'}
-#         PARAMS = {'start_date': start_date,
-#                   'end_date': end_date,
-#                   'min_shift': shift_lengths[0],
-#                   'max_shift': shift_lengths[1]
-#         } 
-#           
-#         data = {'employee_data': employee_data.to_json(),
-#                 'avail_data': availability.to_json(),
-#                 'labor': labor_need.to_json(),
-#                 'open_closed': hours_table.json()
-#         }
-#         
-#         # sending get request and saving the response as response object 
-#         r = requests.get(url = URL, params = PARAMS, data=json.dumps(data)) 
-#           
-#         # extracting data in json format 
-#         if r.response == 201:
-#             return [html.P('Optimization submitted')]
-#         else:
-#             return [html.P('Didn\'t work')]
-#     else:
-#         return []
-# 
-# =============================================================================
+def submit(n_clicks, start_date, end_date, shift_lengths, open_hours, 
+                        emp_info, availability, labor_need):
+    print('in submit')
+    if n_clicks > 0:
+        print('n_clicks')
+        shift_lengths = pd.read_csv(io.StringIO(shift_lengths))
+        availability = pd.read_csv(io.StringIO(availability))
+        labor_need = pd.read_csv(io.StringIO(labor_need))
+        
+        print(shift_lengths)
+        print(open_hours) 
+        print(emp_info)
+    
+        # params & url 
+        URL = "127.0.0.1:5001/optimize"
+        HEADERS = {'Content-Type': 'application/json'}
+        PARAMS = {'start_date': start_date,
+                  'end_date': end_date,
+                  'min_shift': shift_lengths[0],
+                  'max_shift': shift_lengths[1]
+        } 
+          
+        data = {'employee_data': emp_info.to_json(),
+                'avail_data': availability.to_json(),
+                'labor': labor_need.to_json(),
+                'open_closed': open_hours.json()
+        }
+        
+        # sending get request and saving the response as response object 
+        r = requests.get(url = URL, 
+                         headers = HEADERS, 
+                         params = PARAMS, 
+                         data=json.dumps(data)) 
+          
+        # extracting data in json format 
+        if r.response == 201:
+            return [html.P('Optimization submitted')]
+        else:
+            return [html.P('Didn\'t work')]
+    else:
+        return []
+    
 # Running the server
 if __name__ == "__main__":
-    app.run_server(threaded=True, port=8050)
+    app.run_server(threaded=True, debug=True, port=8050)
