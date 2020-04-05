@@ -304,7 +304,8 @@ def parse_contents(contents, filename):
 @app.callback(
     [Output("button-output", "children")],
     [Input("submit-button", "n_clicks")],
-    [State("schedule-date-range", "value"),
+    [State("schedule-date-range", "start_date"),
+      State("schedule-date-range", "end_date"),
       State("shift-lengths", "value"),
       State("hours-table", "data"),
       State("upload-info", "contents"),
@@ -314,44 +315,46 @@ def parse_contents(contents, filename):
       State("upload-labor-need", "contents"),
       State("upload-labor-need", "filename"),],
 )
-def submit(n_clicks, shift_range, shift_lengths, open_hours, 
+def submit(n_clicks, start_date, end_date, shift_lengths, open_hours, 
            emp_info, emp_name, availability, avail_name, labor_need, labor_name):
     print('in submit')
     if n_clicks > 0:
-        print('n_clicks')
-        shift_lengths = parse_contents(emp_info, emp_name)
+
+        emp_info = parse_contents(emp_info, emp_name)
         availability = parse_contents(availability, avail_name)
         labor_need = parse_contents(labor_need, labor_name)
+
 
         # params & url 
         URL = "http://127.0.0.1:5001/optimize"
         HEADERS = {'Content-Type': 'application/json'}
-        PARAMS = {'start_date': shift_range[0],
-                  'end_date': shift_range[1],
+        PARAMS = {'schedule_start': start_date,
+                  'schedule_end': end_date,
                   'min_shift': shift_lengths[0],
                   'max_shift': shift_lengths[1]
         } 
           
-        data = {'employee_data': emp_info,
+        json_data = {'employee_data': emp_info,
                 'avail_data': availability,
                 'labor': labor_need,
                 'open_closed': open_hours
         }
         
         print(PARAMS)
-        print(emp_info)
         
+        print(json_data)
         # sending get request and saving the response as response object 
         r = requests.get(url = URL, 
                          headers = HEADERS, 
                          params = PARAMS, 
-                         data=json.dumps(data)) 
+                         json = json_data) 
           
         # extracting data in json format 
-        if r == 201:
+        print(r.status_code)
+        if r.status_code == 201:
             return [html.P('Optimization submitted')]
         else:
-            return [html.P('Didn\'t work')]
+            return [html.P(str(r.content))]
     else:
         return []
     
