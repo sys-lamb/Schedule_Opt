@@ -25,6 +25,7 @@ import requests
 import io
 import json
 import pandas as pd
+import base64
 
 app = dash.Dash(
     __name__,
@@ -253,6 +254,7 @@ app.layout = html.Div(
 # =============================================================================
 # Render callbacks
 # =============================================================================
+
 @app.callback(
     [Output("app-content", "children"), Output("interval-component", "n_intervals")],
     [Input("app-tabs", "value")],
@@ -284,44 +286,60 @@ def update_interval_state(tab_switch, cur_interval, disabled, cur_stage):
 # =============================================================================
 # Submit optimization callbacks
 # =============================================================================
+def parse_contents(contents, filename):
+    content_type, content_string = contents.split(',')
+
+    decoded = base64.b64decode(content_string)
+    if 'csv' in filename:
+        # Assume that the user uploaded a CSV file
+        df = pd.read_csv(
+            io.StringIO(decoded.decode('utf-8')))
+    elif 'xls' in filename:
+        # Assume that the user uploaded an excel file
+        df = pd.read_excel(io.BytesIO(decoded))
+
+    return df.to_dict('records')
+
+
 @app.callback(
     [Output("button-output", "children")],
     [Input("submit-button", "n_clicks")],
-    [State("schedule-date-range", "start-date"),
-      State("schedule-date-range", "end-date"),
+    [State("schedule-date-range", "value"),
       State("shift-lengths", "value"),
-      State("hours-table", "rows"),
+      State("hours-table", "data"),
       State("upload-info", "contents"),
+      State("upload-info", "filename"),
       State("upload-availability", "contents"),
-      State("upload-labor-need", "contents"),],
+      State("upload-availability", "filename"),
+      State("upload-labor-need", "contents"),
+      State("upload-labor-need", "filename"),],
 )
-def submit(n_clicks, start_date, end_date, shift_lengths, open_hours, 
-                        emp_info, availability, labor_need):
+def submit(n_clicks, shift_range, shift_lengths, open_hours, 
+           emp_info, emp_name, availability, avail_name, labor_need, labor_name):
     print('in submit')
     if n_clicks > 0:
         print('n_clicks')
-        shift_lengths = pd.read_csv(io.StringIO(shift_lengths))
-        availability = pd.read_csv(io.StringIO(availability))
-        labor_need = pd.read_csv(io.StringIO(labor_need))
-        
-        print(shift_lengths)
-        print(open_hours) 
-        print(emp_info)
-    
+        shift_lengths = parse_contents(emp_info, emp_name)
+        availability = parse_contents(availability, avail_name)
+        labor_need = parse_contents(labor_need, labor_name)
+
         # params & url 
-        URL = "127.0.0.1:5001/optimize"
+        URL = "http://127.0.0.1:5001/optimize"
         HEADERS = {'Content-Type': 'application/json'}
-        PARAMS = {'start_date': start_date,
-                  'end_date': end_date,
+        PARAMS = {'start_date': shift_range[0],
+                  'end_date': shift_range[1],
                   'min_shift': shift_lengths[0],
                   'max_shift': shift_lengths[1]
         } 
           
-        data = {'employee_data': emp_info.to_json(),
-                'avail_data': availability.to_json(),
-                'labor': labor_need.to_json(),
-                'open_closed': open_hours.json()
+        data = {'employee_data': emp_info,
+                'avail_data': availability,
+                'labor': labor_need,
+                'open_closed': open_hours
         }
+        
+        print(PARAMS)
+        print(emp_info)
         
         # sending get request and saving the response as response object 
         r = requests.get(url = URL, 
@@ -330,7 +348,7 @@ def submit(n_clicks, start_date, end_date, shift_lengths, open_hours,
                          data=json.dumps(data)) 
           
         # extracting data in json format 
-        if r.response == 201:
+        if r == 201:
             return [html.P('Optimization submitted')]
         else:
             return [html.P('Didn\'t work')]
