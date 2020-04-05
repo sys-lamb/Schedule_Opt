@@ -352,8 +352,10 @@ def submit(n_clicks, start_date, end_date, shift_lengths, open_hours,
         # extracting data in json format 
         print(r.status_code)
         if r.status_code == 201:
+            print(r.content)
             return [html.P('Optimization submitted')]
         else:
+            print(r.content)
             return [html.P(str(r.content))]
     else:
         return []
