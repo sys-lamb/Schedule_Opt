@@ -1,8 +1,8 @@
 /* Main app css */
 
-#app-container * {
-  box-sizing: border-box;
-  -moz-box-sizing: border-box;
+#tabs {
+  box-sizing: border-box !important;
+  -moz-box-sizing: border-box !important;
 }
 
 body {
@@ -23,6 +23,7 @@ body {
   align-items: center;
   padding: 0 6rem;
 }
+
 
 /* Header css*/
 
@@ -66,11 +67,6 @@ body {
   margin: 0px 10px;
 }
 
-/* Tab Selector css */
-#tabs {
-  width: 100%;
-}
-
 .custom-tabs {
   background-color: #1E2130;
   text-transform: uppercase;
@@ -80,7 +76,7 @@ body {
   cursor: pointer;
 }
 
-#input-tab.custom-tab, #output-tab.custom-tab {
+#tab1.custom-tab, #tab2.custom-tab {
   background-color: #161a28;
   letter-spacing: 1px;
   color: inherit;
@@ -124,4 +120,14 @@ body {
   float: right;
   width: 40vw;
 }
+
+#email-outputs {
+  width: 90vw;
+  display: flex;
+  padding: 10px;
+  flex-flow: row wrap;
+  align-items: center;
+  justify-content: center;
+}
+
 

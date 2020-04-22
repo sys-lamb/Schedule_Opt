@@ -12,6 +12,8 @@ Created on Sun Mar  1 19:46:22 2020
 from datetime import datetime as dt
 from datetime import timedelta
 import os
+import dash_bootstrap_components as dbc
+import numpy as np
 import pathlib
 import dash
 import dash_core_components as dcc
@@ -26,6 +28,13 @@ import io
 import json
 import pandas as pd
 import base64
+import json
+import smtplib, ssl
+import pandas as pd
+from email.message import EmailMessage
+import re
+import plotly.graph_objects as go
+
 
 app = dash.Dash(
     __name__,
@@ -37,6 +46,70 @@ app.config["suppress_callback_exceptions"] = True
 dows = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 initial_hours = [['Open', '12am', '12am', '12am', '12am', '12am', '12am', '12am'], ['Close', '12pm', '12pm', '12pm', '12pm', '12pm', '12pm', '12pm']]
 initial_hours = pd.DataFrame(initial_hours, columns = dows)
+
+
+def gen_comparison(df1):
+    
+    data = json.loads(df1)
+    df1= pd.DataFrame.from_records(data)  
+
+    df = df1.groupby(['shift', 'req', 'day_of_week', 'start_hour', 'end_hour'])['employee_name'].nunique().reset_index()
+    df['key'] = 1
+    
+    index = pd.DataFrame(list(range(1,25)), columns = ['hour'])
+    index['key'] = 1
+    
+    df = df.merge(index, how = 'left', on = 'key' )
+    df = df[(df['hour'] < df['end_hour']) & (df['hour'] >= df['start_hour'])]
+    df = df.drop(['key', 'start_hour', 'end_hour'], axis = 1)
+    df = df.merge(df1[['shift', 'start']], how = 'left', on = 'shift')
+    
+    df['start'] = df['start'].apply(lambda x: x[0:10]) 
+    df['start'] = df['start'] + ' ' + df['hour'].astype(str) + ':00'
+    df = df[['start', 'req', 'employee_name']].drop_duplicates().sort_values('start')
+
+    return df
+
+
+def gen_total_cost(df1):
+    
+    data = json.loads(df1)
+    df= pd.DataFrame.from_records(data)  
+
+    df['shift_cost'] = df['hourly_rate'] * df['duration']
+    total_cost = df['shift_cost'].sum()
+    return 'Schedule cost: $' + str(total_cost)
+
+def gen_overage(df1):
+    
+    data = json.loads(df1)
+    df1= pd.DataFrame.from_records(data)  
+
+    df = df1.groupby(['shift', 'req', 'day_of_week', 'start_hour', 'end_hour'])['employee_name'].nunique().reset_index()
+    df['key'] = 1
+    
+    index = pd.DataFrame(list(range(1,25)), columns = ['hour'])
+    index['key'] = 1
+    
+    df = df.merge(index, how = 'left', on = 'key' )
+    df = df[(df['hour'] < df['end_hour']) & (df['hour'] >= df['start_hour'])]
+    df = df.drop(['key', 'start_hour', 'end_hour'], axis = 1)
+    df = df.merge(df1[['shift', 'start']], how = 'left', on = 'shift')
+    
+    df['start'] = df['start'].apply(lambda x: x[0:10]) 
+    df['start'] = df['start'] + ' ' + df['hour'].astype(str) + ':00'
+    df = df[['start', 'req', 'employee_name']].drop_duplicates().sort_values('start')
+    
+    overage = df['req'].sum() - df['employee_name'].sum()
+    if overage > 0:
+        overage = str(round(overage)) + ' labor hours short' 
+    elif overage == 0:
+        overage = 'Labor requirements exactly staffed'
+    else:
+        overage = str(round(overage)) + ' labor hours over' 
+        
+    return overage
+
 
 APP_PATH = str(pathlib.Path(__file__).parent.resolve())
 
@@ -216,12 +289,66 @@ def gen_input_tab():
         ]),
     ]
 
-def gen_output_tab():
+def gen_output_tab(df, overage, total_cost):
+
+    fig = go.Figure()
+
+    fig.add_trace(go.Scatter(
+        x = list(df['start'].values),
+        y = list(df['req'].values),
+        name = 'Labor Requirement'
+    ))
+    
+    fig.add_trace(go.Scatter(
+        x = list(df['start'].values),
+        y = list(df['employee_name'].values),
+        name = 'Employees Staffed'
+    ))
+    
+    fig.update_layout(
+        title = "Labor Requirements x Optimized Staffing",
+        yaxis = dict(
+          scaleanchor = "x",
+          scaleratio = 1,
+          rangemode='tozero'
+        )
+    )
+        
     return [
         html.Div(
             id="set-output-intro-container",
             children=[
-                html.P( "Am here.  Hi.  Tab 2."),
+                html.Div(id='outer-output-div',
+                    children = [
+                        html.Div(
+                        id='email-outputs',
+                        children = [
+                            dcc.Input(id="email", type="text", placeholder="Email"),
+                            html.P('  '),
+                            dcc.Input(id="password", type="password", placeholder="Password"),
+                            html.P('  '),
+                            html.Button('Email schedules!', id='email-button'),
+                            html.Br(),
+                            html.Div(id="email-output", children=['']),
+
+                        ]),
+                        html.Div(
+                            id='metrics-text',
+                            children = [
+                                html.P(total_cost),
+                                html.P(overage),
+                        ]),
+                        html.Div(
+                            id='metrics-output',
+                            children = [html.Div([
+                                    dcc.Graph(
+                                    id='example-graph',
+                                        figure=fig
+                                    )
+                                ])
+                        ]),  
+
+                ]),
             ]
         )]
 
@@ -239,14 +366,42 @@ app.layout = html.Div(
             n_intervals=50,  
             disabled=True,
         ),
+                        
+        html.Div(id="tab-container",
+            className="tabs",
+            children = [
+                dbc.Tabs(
+                    [
+                        dbc.Tab(label="Optimizer Input", 
+                                tab_id="tab1", 
+                                tab_style={"margin-left": "auto"},
+                                className="custom-tabs"),
+                        dbc.Tab(label="Schedule Output", 
+                                tab_id="tab2", 
+                                label_style={"color": "#00AEF9"},
+                                className="custom-tabs"),
+                    ],
+                    id="tabs",
+                    card=True,
+                    active_tab="tab1",
+                ),
+            ]
+        ),
         html.Div(
             id="app-container",
             children=[
-                gen_tabs(),
+
+                html.Div(id="content"),
                 # Main app
-                html.Div(id="app-content"),
             ],
         ),
+        html.Div(
+            id='optimization-output',
+            children = [
+                html.P('')
+            ], style={'display': 'none'}
+        ),
+
         dcc.Store(id="n-interval-stage", data=50),
     ],
 )
@@ -255,33 +410,20 @@ app.layout = html.Div(
 # Render callbacks
 # =============================================================================
 
-@app.callback(
-    [Output("app-content", "children"), Output("interval-component", "n_intervals")],
-    [Input("app-tabs", "value")],
-    [State("n-interval-stage", "data")],
-)
-def render_tab_content(tab_switch, stopped_interval):
-    if tab_switch == "tab1":
-        return gen_input_tab(), stopped_interval
-    if tab_switch == "tab2":
-        return gen_output_tab(), stopped_interval
 
-@app.callback(
-    Output("n-interval-stage", "data"),
-    [Input("app-tabs", "value")],
-    [
-        State("interval-component", "n_intervals"),
-        State("interval-component", "disabled"),
-        State("n-interval-stage", "data"),
-    ],
-)
-def update_interval_state(tab_switch, cur_interval, disabled, cur_stage):
-    if disabled:
-        return cur_interval
-
-    if tab_switch == "tab1":
-        return cur_interval
-    return cur_stage
+@app.callback(Output("content", "children"), 
+              [Input("tabs", "active_tab")],
+              [State("optimization-output", "children")])
+def switch_tab(at, data):
+    if at == "tab1":
+        return gen_input_tab()
+    elif at == "tab2":
+        print('tab2')
+        df = gen_comparison(data)
+        overage = gen_overage(data)
+        total_cost = gen_total_cost(data)
+        return gen_output_tab(df, overage, total_cost)
+    return html.P("This shouldn't ever be displayed...")
 
 # =============================================================================
 # Submit optimization callbacks
@@ -300,9 +442,9 @@ def parse_contents(contents, filename):
 
     return df.to_dict('records')
 
-
+    
 @app.callback(
-    [Output("button-output", "children")],
+    [Output("optimization-output", "children")],
     [Input("submit-button", "n_clicks")],
     [State("schedule-date-range", "start_date"),
       State("schedule-date-range", "end_date"),
@@ -339,10 +481,7 @@ def submit(n_clicks, start_date, end_date, shift_lengths, open_hours,
                 'labor': labor_need,
                 'open_closed': open_hours
         }
-        
-        print(PARAMS)
-        
-        print(json_data)
+
         # sending get request and saving the response as response object 
         r = requests.get(url = URL, 
                          headers = HEADERS, 
@@ -352,13 +491,73 @@ def submit(n_clicks, start_date, end_date, shift_lengths, open_hours,
         # extracting data in json format 
         print(r.status_code)
         if r.status_code == 201:
-            print(r.content)
-            return [html.P('Optimization submitted')]
+            encoding = 'utf-8'
+            return [r.content.decode(encoding)]
         else:
             print(r.content)
-            return [html.P(str(r.content))]
+            return ['']
     else:
         return []
+    
+@app.callback(
+    [Output("email-output", "children")],
+    [Input("email-button", "n_clicks")],
+    [State("optimization-output", "children"),
+     State("email", "value"),
+     State("password", "value")]
+)
+def send_email(n_clicks, data, sender_email, password):
+    print('in submit')
+    if n_clicks > 0:
+        print(sender_email)
+        print(password)
+        print(data)
+        data = json.loads(data)
+        print('json loaded')
+        data = pd.DataFrame.from_records(data)    
+        
+        port = 587  # For starttls
+        smtp_server = "smtp.gmail.COM"
+     
+        context = ssl.create_default_context()
+        with smtplib.SMTP(smtp_server, port) as server:
+            server.connect('smtp.gmail.com', '587')
+            server.ehlo()  # Can be omitted
+            server.starttls(context=context)
+            server.ehlo()  # Can be omitted
+            server.login(sender_email, password)
+        
+            for x in data.employee_name.unique():
+                tmp = data.query("employee_name == '{0}'".format(x))
+                receiver_name = tmp.employee_name.unique()[0]
+                receiver_email = tmp.employee_email.unique()[0]
+                
+                print(receiver_name)
+                # Create the container email message.
+                msg = EmailMessage()
+                msg['Subject'] = 'Upcoming Schedule'
+                msg['From'] = sender_email
+                msg['To'] = receiver_email
+                message = """\
+                Hi there, {0}
+                You are scheduled for the following shifts:       
+                """.format(receiver_name)
+                message = re.sub('    ','',message)
+                for idx, row in tmp.iterrows():
+                    shift_row = '{0} {1} from {2} to {3}\n'.format(row['day_of_week'], 
+                                                                   row['start'][0:10],
+                                                                   row['start_hour'], 
+                                                                   row['end_hour'])
+                    message = message + shift_row
+    
+                msg.set_content(message)
+                server.send_message(msg)
+    return ['Emails sent!']
+
+        
+        
+        
+
     
 # Running the server
 if __name__ == "__main__":

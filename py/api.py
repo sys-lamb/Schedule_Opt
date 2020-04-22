@@ -10,9 +10,12 @@ Created on Sun Mar 29 13:07:43 2020
 # =============================================================================
 import flask
 from flask import request, jsonify
+import datetime
 import os
 import pandas as pd
+import json
 import numpy as np
+import requests
 os.chdir('/Users/alexlamb/Desktop/Schedule_Opt/py')
 from helper import (generate_shifts,
                     generate_availability,
@@ -27,6 +30,7 @@ from helper import (generate_shifts,
 app = flask.Flask(__name__)
 app.config["DEBUG"] = True
 
+        
 @app.route('/optimize', methods=['GET'])
 def optimize():
     try:
@@ -36,8 +40,7 @@ def optimize():
         
         min_shift = int(request.args.get('min_shift')) # int betwen 1 and 12
         max_shift = int(request.args.get('max_shift')) # int betwen 1 and 12
-        
-        print('fucking hello?')
+    
         data = request.get_json()
         
         print(type(min_shift))
@@ -67,6 +70,12 @@ def optimize():
         print('heyo3')
         results = format_results(results, employee_data, shifts)
         print('got results')
+        def myconverter(o):
+            if isinstance(o, datetime.datetime):
+                return o.__str__()
+
+        with open('/Users/alexlamb/Desktop/Schedule_Opt/data.txt', 'w') as outfile:
+            json.dump(results.to_dict('records'), outfile, default = myconverter)
         return jsonify(results.to_dict('records')), 201
     except Exception as e:
         print(e)
