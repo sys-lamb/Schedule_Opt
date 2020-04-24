@@ -11,9 +11,7 @@ Created on Sun Mar  1 19:46:22 2020
 # =============================================================================
 from datetime import datetime as dt
 from datetime import timedelta
-import os
 import dash_bootstrap_components as dbc
-import numpy as np
 import pathlib
 import dash
 import dash_core_components as dcc
@@ -21,33 +19,30 @@ import dash_html_components as html
 from dash.dependencies import Input, Output, State
 import dash_table
 import plotly.graph_objs as go
-import dash_daq as daq
-import dash_table
 import requests 
 import io
 import json
 import pandas as pd
 import base64
-import json
 import smtplib, ssl
-import pandas as pd
 from email.message import EmailMessage
 import re
-import plotly.graph_objects as go
 
-
+# Initialize dash app
 app = dash.Dash(
     __name__,
     meta_tags=[{"name": "viewport", "content": "width=device-width, initial-scale=1"}],
 )
 server = app.server
 app.config["suppress_callback_exceptions"] = True
+APP_PATH = str(pathlib.Path(__file__).parent.resolve())
 
+# Initialize some data for the app to display
 dows = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 initial_hours = [['Open', '12am', '12am', '12am', '12am', '12am', '12am', '12am'], ['Close', '12pm', '12pm', '12pm', '12pm', '12pm', '12pm', '12pm']]
 initial_hours = pd.DataFrame(initial_hours, columns = dows)
 
-
+# Helper function to compare labor need to scheduled staffing
 def gen_comparison(df1):
     
     data = json.loads(df1)
@@ -70,7 +65,7 @@ def gen_comparison(df1):
 
     return df
 
-
+# Generate total cost of the schedule
 def gen_total_cost(df1):
     
     data = json.loads(df1)
@@ -80,6 +75,7 @@ def gen_total_cost(df1):
     total_cost = df['shift_cost'].sum()
     return 'Schedule cost: $' + str(total_cost)
 
+# Generate labor hour overage/underage
 def gen_overage(df1):
     
     data = json.loads(df1)
@@ -110,12 +106,11 @@ def gen_overage(df1):
         
     return overage
 
-
-APP_PATH = str(pathlib.Path(__file__).parent.resolve())
-
 # =============================================================================
 # Layout generators
 # =============================================================================
+
+# HTML layout for page header
 def gen_header():
     return html.Div(
         id="header",
@@ -128,6 +123,26 @@ def gen_header():
                     html.H6("Input your employee information and get an optimized schedule!"),
                 ],
             ),
+            html.Div(id="tab-container",
+            className="tabs",
+            children = [
+                dbc.Tabs(
+                    [
+                        dbc.Tab(label="Optimizer Input", 
+                                tab_id="tab1", 
+                                tab_style={"margin-left": "auto"},
+                                className="custom-tabs"),
+                        dbc.Tab(label="Schedule Output", 
+                                tab_id="tab2", 
+                                label_style={"color": "#00AEF9"},
+                                className="custom-tabs"),
+                    ],
+                    id="tabs",
+                    card=True,
+                    active_tab="tab1",
+                ),
+                
+            ]),
             html.Div(
                 id="header-logo",
                 children=[
@@ -138,6 +153,7 @@ def gen_header():
     )
 
 
+# HTML layout for two tab links
 def gen_tabs():
     return html.Div(
         id="tabs",
@@ -167,6 +183,7 @@ def gen_tabs():
         ],
     )
 
+# HTML layout for input tab
 def gen_input_tab():
     return [
         # Manually select metrics
@@ -289,6 +306,7 @@ def gen_input_tab():
         ]),
     ]
 
+# HTML layout for output tab
 def gen_output_tab(df, overage, total_cost):
 
     fig = go.Figure()
@@ -355,7 +373,6 @@ def gen_output_tab(df, overage, total_cost):
 # =============================================================================
 # App layout
 # =============================================================================
-
 app.layout = html.Div(
     id="big-app-container",
     children=[
@@ -365,27 +382,6 @@ app.layout = html.Div(
             interval=2 * 1000,
             n_intervals=50,  
             disabled=True,
-        ),
-                        
-        html.Div(id="tab-container",
-            className="tabs",
-            children = [
-                dbc.Tabs(
-                    [
-                        dbc.Tab(label="Optimizer Input", 
-                                tab_id="tab1", 
-                                tab_style={"margin-left": "auto"},
-                                className="custom-tabs"),
-                        dbc.Tab(label="Schedule Output", 
-                                tab_id="tab2", 
-                                label_style={"color": "#00AEF9"},
-                                className="custom-tabs"),
-                    ],
-                    id="tabs",
-                    card=True,
-                    active_tab="tab1",
-                ),
-            ]
         ),
         html.Div(
             id="app-container",
@@ -410,7 +406,6 @@ app.layout = html.Div(
 # Render callbacks
 # =============================================================================
 
-
 @app.callback(Output("content", "children"), 
               [Input("tabs", "active_tab")],
               [State("optimization-output", "children")])
@@ -426,7 +421,7 @@ def switch_tab(at, data):
     return html.P("This shouldn't ever be displayed...")
 
 # =============================================================================
-# Submit optimization callbacks
+# User action callbacks
 # =============================================================================
 def parse_contents(contents, filename):
     content_type, content_string = contents.split(',')
@@ -442,7 +437,7 @@ def parse_contents(contents, filename):
 
     return df.to_dict('records')
 
-    
+# Send user inputs to the api and return optimized output   
 @app.callback(
     [Output("optimization-output", "children")],
     [Input("submit-button", "n_clicks")],
@@ -465,8 +460,7 @@ def submit(n_clicks, start_date, end_date, shift_lengths, open_hours,
         emp_info = parse_contents(emp_info, emp_name)
         availability = parse_contents(availability, avail_name)
         labor_need = parse_contents(labor_need, labor_name)
-
-
+        
         # params & url 
         URL = "http://127.0.0.1:5001/optimize"
         HEADERS = {'Content-Type': 'application/json'}
@@ -498,7 +492,8 @@ def submit(n_clicks, start_date, end_date, shift_lengths, open_hours,
             return ['']
     else:
         return []
-    
+   
+# Send email to each of the employees with their schedule
 @app.callback(
     [Output("email-output", "children")],
     [Input("email-button", "n_clicks")],
@@ -509,11 +504,7 @@ def submit(n_clicks, start_date, end_date, shift_lengths, open_hours,
 def send_email(n_clicks, data, sender_email, password):
     print('in submit')
     if n_clicks > 0:
-        print(sender_email)
-        print(password)
-        print(data)
         data = json.loads(data)
-        print('json loaded')
         data = pd.DataFrame.from_records(data)    
         
         port = 587  # For starttls
@@ -554,11 +545,6 @@ def send_email(n_clicks, data, sender_email, password):
                 server.send_message(msg)
     return ['Emails sent!']
 
-        
-        
-        
-
-    
-# Running the server
+# Running the app on the server
 if __name__ == "__main__":
     app.run_server(threaded=True, debug=True, port=8050)

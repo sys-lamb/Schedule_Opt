@@ -6,6 +6,9 @@ Created on Sat Feb 22 16:41:15 2020
 @author: alexlamb
 """
 
+# =============================================================================
+# Package imports
+# =============================================================================
 import pandas as pd
 import numpy as np
 from datetime import datetime as dt
@@ -19,8 +22,11 @@ import collections as cl
 # =============================================================================
 def generate_shifts(schedule_start, schedule_end, min_shift, max_shift, open_closed):
     
+    # Parse strings into dates
     d1 = dt.strptime(schedule_start, '%Y-%m-%d')
     d2 = dt.strptime(schedule_end, '%Y-%m-%d')
+    
+    # Generate all possible shifts
     hours = pd.date_range(d1, d2, freq='H')
     shifts = [[x, x + timedelta(hours = y)] for x in hours for y in range(min_shift, max_shift + 1)]
     shifts = pd.DataFrame(shifts, columns = ['start','end'])
@@ -28,6 +34,7 @@ def generate_shifts(schedule_start, schedule_end, min_shift, max_shift, open_clo
     shifts['start_hour'] = shifts['start'].dt.hour
     shifts['end_hour'] = shifts['end'].dt.hour
     
+    # Filter shifts to only when the store is open
     shifts = shifts.merge(open_closed, how = 'outer', on = 'day_of_week')
     shifts['interday'] = np.where(shifts['start'].dt.date == shifts['end'].dt.date, 0, 1)
     shifts['is_open'] = ((shifts['interday'] == 0) & (shifts['end_hour'] < shifts['close']) & (shifts['start_hour'] >= shifts['open']))
@@ -40,6 +47,7 @@ def generate_shifts(schedule_start, schedule_end, min_shift, max_shift, open_clo
 
 def generate_availability(shifts, avail_data, employee_data):
     
+    # Set a flag if an employee is available for a shift
     shift_avail = avail_data.merge(shifts, how = 'outer', on = 'day_of_week')
 
     shift_avail['is_avail'] = ((shift_avail['start_hour'] >= shift_avail['start_avail_time']) & 
