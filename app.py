@@ -54,34 +54,31 @@ initial_hours = pd.DataFrame(initial_hours, columns = dows)
 # Helper function to compare labor need to scheduled staffing
 def gen_comparison(df1):
     
-    print(df1)
     data = json.loads(df1)
     
     df1= pd.DataFrame.from_records(data['output']).sort_values('start')
     labor = pd.DataFrame.from_records(data['labor'])
-    
+
     df = df1.groupby(['shift', 'req', 'day_of_week', 'start_hour', 'end_hour'])['employee_name'].nunique().reset_index()
     df['key'] = 1
-    
     index = pd.DataFrame(list(range(1,25)), columns = ['hour'])
     index['key'] = 1
     
+    print(df.columns)
     df = df.merge(index, how = 'left', on = 'key' )
     df = df[(df['hour'] < df['end_hour']) & (df['hour'] >= df['start_hour'])]
     df = df.drop(['key', 'start_hour', 'end_hour'], axis = 1)
     df = df.merge(df1[['shift', 'start']], how = 'left', on = 'shift')
-    df = df.merge(labor, how = 'left', on = ['day_of_week', 'hour'])
-    df['req'] = df['labor_need']
-    df.drop(['labor_need'], axis = 1, inplace = True)
-
     df['start'] = df['start'].apply(lambda x: x[0:10]) 
     df['start'] = df['start'] + ' ' + df['hour'].astype(str) + ':00'
-    df = df[['start', 'req', 'employee_name']].drop_duplicates()
     df = df.drop_duplicates()
     
+    print(df.columns)
+
+    df = df.groupby(['day_of_week', 'hour', 'start'])['employee_name'].sum().reset_index()
+    df = df.merge(labor, how = 'outer', on = ['day_of_week', 'hour'])
     df['sort'] = pd.to_datetime(df['start'])
     df = df.sort_values('sort')
-    df = df.groupby(['day_of_week', 'hour', 'req', 'start', 'sort'])['employee_name'].sum().reset_index()
     df.drop('sort', axis = 1, inplace = True)
 
     return df

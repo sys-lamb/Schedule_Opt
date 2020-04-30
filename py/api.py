@@ -87,6 +87,8 @@ def optimize():
         
         with open('/Users/alexlamb/Desktop/Schedule_Opt/data.txt', 'w') as outfile:
             json.dump(results.to_dict('records'), outfile, default = myconverter)
+        with open('/Users/alexlamb/Desktop/Schedule_Opt/labor.txt', 'w') as outfile:
+            json.dump(labor.to_dict('records'), outfile, default = myconverter)
         
         output = {'labor':labor.to_dict('records'), 'output':results.to_dict('records')}   
         return jsonify(output), 201
