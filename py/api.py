@@ -58,12 +58,13 @@ def optimize():
         labor = pd.DataFrame.from_records(data['labor'])
 
         # Structure open and closed hours for optimization
-        open_closed = open_closed.melt('Type', var_name = 'day_of_week', value_name = 'hour')
-        open_closed = open_closed.pivot('day_of_week', 'Type').reset_index(level=0)
+        open_closed = open_closed.melt('type', var_name = 'day_of_week', value_name = 'hour')
+        open_closed = open_closed.pivot('day_of_week', 'type').reset_index(level=0)
         open_closed.columns = open_closed.columns.rename(['drop', 'type']).droplevel('drop')
         open_closed.columns = ['day_of_week', 'close', 'open']
-        open_closed['close'] = pd.to_datetime(open_closed['close'].str.upper(), format='%I%p').dt.hour
-        open_closed['open'] = pd.to_datetime(open_closed['open'].str.upper(), format='%I%p').dt.hour
+        
+        open_closed['close'] = pd.to_datetime(open_closed['close'].str.upper(), format='%I:%M %p').dt.hour
+        open_closed['open'] = pd.to_datetime(open_closed['open'].str.upper(), format='%I:%M %p').dt.hour
         
         # Generate all possible shifts
         shifts = generate_shifts(schedule_start, schedule_end, min_shift, max_shift, open_closed)
@@ -80,7 +81,15 @@ def optimize():
         # Format the optimization results to pass back to front end
         results = format_results(results, employee_data, shifts)
 
-        return jsonify(results.to_dict('records')), 201
+        def myconverter(o):
+            if isinstance(o, datetime.datetime):
+                return o.__str__()
+        
+        with open('/Users/alexlamb/Desktop/Schedule_Opt/data.txt', 'w') as outfile:
+            json.dump(results.to_dict('records'), outfile, default = myconverter)
+        
+        output = {'labor':labor.to_dict('records'), 'output':results.to_dict('records')}   
+        return jsonify(output), 201
     except Exception as e:
         print(e)
         return jsonify(['failure']), 404

@@ -28,6 +28,15 @@ import smtplib, ssl
 from email.message import EmailMessage
 import re
 
+def datetime_range(start, end, delta):
+    current = start
+    while current < end:
+        yield current
+        current += delta
+
+dts = [dt.strftime('%-I:%M %p') for dt in 
+       datetime_range(dt(2010, 9, 1), dt(2010, 9, 2), timedelta(hours=1))]
+
 # Initialize dash app
 app = dash.Dash(
     __name__,
@@ -38,16 +47,19 @@ app.config["suppress_callback_exceptions"] = True
 APP_PATH = str(pathlib.Path(__file__).parent.resolve())
 
 # Initialize some data for the app to display
-dows = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-initial_hours = [['Open', '12am', '12am', '12am', '12am', '12am', '12am', '12am'], ['Close', '12pm', '12pm', '12pm', '12pm', '12pm', '12pm', '12pm']]
+dows = ['type', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+initial_hours = [['Open', dts[0], dts[0], dts[0], dts[0], dts[0], dts[0], dts[0]], ['Close', dts[len(dts)-1], dts[len(dts)-1], dts[len(dts)-1], dts[len(dts)-1], dts[len(dts)-1], dts[len(dts)-1], dts[len(dts)-1]]]
 initial_hours = pd.DataFrame(initial_hours, columns = dows)
 
 # Helper function to compare labor need to scheduled staffing
 def gen_comparison(df1):
     
+    print(df1)
     data = json.loads(df1)
-    df1= pd.DataFrame.from_records(data)  
-
+    
+    df1= pd.DataFrame.from_records(data['output']).sort_values('start')
+    labor = pd.DataFrame.from_records(data['labor'])
+    
     df = df1.groupby(['shift', 'req', 'day_of_week', 'start_hour', 'end_hour'])['employee_name'].nunique().reset_index()
     df['key'] = 1
     
@@ -58,10 +70,19 @@ def gen_comparison(df1):
     df = df[(df['hour'] < df['end_hour']) & (df['hour'] >= df['start_hour'])]
     df = df.drop(['key', 'start_hour', 'end_hour'], axis = 1)
     df = df.merge(df1[['shift', 'start']], how = 'left', on = 'shift')
-    
+    df = df.merge(labor, how = 'left', on = ['day_of_week', 'hour'])
+    df['req'] = df['labor_need']
+    df.drop(['labor_need'], axis = 1, inplace = True)
+
     df['start'] = df['start'].apply(lambda x: x[0:10]) 
     df['start'] = df['start'] + ' ' + df['hour'].astype(str) + ':00'
-    df = df[['start', 'req', 'employee_name']].drop_duplicates().sort_values('start')
+    df = df[['start', 'req', 'employee_name']].drop_duplicates()
+    df = df.drop_duplicates()
+    
+    df['sort'] = pd.to_datetime(df['start'])
+    df = df.sort_values('sort')
+    df = df.groupby(['day_of_week', 'hour', 'req', 'start', 'sort'])['employee_name'].sum().reset_index()
+    df.drop('sort', axis = 1, inplace = True)
 
     return df
 
@@ -69,7 +90,7 @@ def gen_comparison(df1):
 def gen_total_cost(df1):
     
     data = json.loads(df1)
-    df= pd.DataFrame.from_records(data)  
+    df= pd.DataFrame.from_records(data['output'])  
 
     df['shift_cost'] = df['hourly_rate'] * df['duration']
     total_cost = df['shift_cost'].sum()
@@ -79,7 +100,7 @@ def gen_total_cost(df1):
 def gen_overage(df1):
     
     data = json.loads(df1)
-    df1= pd.DataFrame.from_records(data)  
+    df1= pd.DataFrame.from_records(data['output'])  
 
     df = df1.groupby(['shift', 'req', 'day_of_week', 'start_hour', 'end_hour'])['employee_name'].nunique().reset_index()
     df['key'] = 1
@@ -119,7 +140,7 @@ def gen_header():
             html.Div(
                 id="header-text",
                 children=[
-                    html.H5("Schedule Optimization Software"),
+                    html.H5("Generate My Schedule"),
                     html.H6("Input your employee information and get an optimized schedule!"),
                 ],
             ),
@@ -218,89 +239,140 @@ def gen_input_tab():
                         html.P('Fill in your open hours below'),
                         dash_table.DataTable(
                             id='hours-table',
-                            columns=[{"name": i, "id": i} for i in initial_hours.columns],
-                            data=initial_hours.to_dict('records'),
+                            columns=[
+                                {'id': 'type', 'name': '', },
+                                {'id': 'Monday', 'name': 'Monday', 'presentation': 'dropdown'},
+                                {'id': 'Tuesday', 'name': 'Tuesday', 'presentation': 'dropdown'},
+                                {'id': 'Wednesday', 'name': 'Wednesday', 'presentation': 'dropdown'},
+                                {'id': 'Thursday', 'name': 'Thursday', 'presentation': 'dropdown'},
+                                {'id': 'Friday', 'name': 'Friday', 'presentation': 'dropdown'},
+                                {'id': 'Saturday', 'name': 'Saturday', 'presentation': 'dropdown'},
+                                {'id': 'Sunday', 'name': 'Sunday', 'presentation': 'dropdown'},
+                            ],
                             editable=True,
+                            dropdown={
+                                'Monday': {'options': [{'label': i, 'value': i} for i in dts ]},
+                                'Tuesday': {'options': [{'label': i, 'value': i} for i in dts ]},
+                                'Wednesday': {'options': [{'label': i, 'value': i} for i in dts ]},
+                                'Thursday': {'options': [{'label': i, 'value': i} for i in dts ]},
+                                'Friday': {'options': [{'label': i, 'value': i} for i in dts ]},
+                                'Saturday': {'options': [{'label': i, 'value': i} for i in dts ]},
+                                'Sunday': {'options': [{'label': i, 'value': i} for i in dts ]},
+                            },
+                            data=initial_hours.to_dict('records'),
                             style_header={'backgroundColor': '#1e2130'},
                             style_cell={
-                                'backgroundColor': '#1e2130',
-                                'color': 'white'
+                                'backgroundColor': '#C1E7E3',
+                            #    'color': '#FFFFFF'
                             },
+                            style_data_conditional=[{
+                                'if': {'column_id': 'type'},
+                                'color': 'black',
+                            }],
                         ),
                         html.Br(),
+     
                         html.Button('Optimize me!', id='submit-button'),
+                        html.Br(),
+                        html.Br(),
                         html.Div(
                             id='button-output',
                             children = [
-                                html.P('')
                         ]),
+                        
+     
+
                     ]),
                     html.Div(
                         id='uploads',
                         children = [
                             html.Br(),
-                            html.P('Upload your employee information below'),
-                            dcc.Upload(
-                                id='upload-info',
-                                children=html.Div([
-                                    'Drag and Drop or ',
-                                    html.A('Select Files')
-                                ]),
-                                style={
-                                    'width': '100%',
-                                    'height': '60px',
-                                    'lineHeight': '60px',
-                                    'borderWidth': '1px',
-                                    'borderStyle': 'dashed',
-                                    'borderRadius': '5px',
-                                    'textAlign': 'center',
-                                    'margin': '10px'
-                                },
-                                # Allow multiple files to be uploaded
-                                multiple=False
-                            ),
+                            dcc.Markdown('**Upload your employee information below**'),
+                            dcc.Markdown('Format: *employee_name, employee_email, hourly_rate, min_hours, max_hours*'),
+                            html.Div(id = 'upload1',
+                                     children = [
+                                        dcc.Upload(
+                                            id='upload-info',
+                                            children=html.Div([
+                                                'Drag and Drop or ',
+                                                html.A('Select Files')
+                                            ]),
+                                            style={
+                                                'width': '100%',
+                                                'height': '60px',
+                                                'lineHeight': '60px',
+                                                'borderWidth': '1px',
+                                                'borderStyle': 'dashed',
+                                                'borderRadius': '5px',
+                                                'textAlign': 'center',
+                                                'margin': '10px'
+                                            },
+                                            # Allow multiple files to be uploaded
+                                            multiple=False
+                                        ),
+                                        html.Div(
+                                            id='employee-file',
+                                            children = [
+                                        ]), 
+                            ]),
                             html.Br(),
-                            html.P('Upload your employee availability below'),
-                            dcc.Upload(
-                                id='upload-availability',
-                                children=html.Div([
-                                    'Drag and Drop or ',
-                                    html.A('Select Files')
-                                ]),
-                                style={
-                                    'width': '100%',
-                                    'height': '60px',
-                                    'lineHeight': '60px',
-                                    'borderWidth': '1px',
-                                    'borderStyle': 'dashed',
-                                    'borderRadius': '5px',
-                                    'textAlign': 'center',
-                                    'margin': '10px'
-                                },
-                                # Allow multiple files to be uploaded
-                                multiple=False
-                            ),
+                            dcc.Markdown('**Upload your employee availability below**'),
+                            dcc.Markdown('Format: *employee_name, day_of_week, start_avail_time, end_avail_time*'),
+                            html.Div(id = 'upload2',
+                                     children = [
+                                        dcc.Upload(
+                                            id='upload-availability',
+                                            children=html.Div([
+                                                'Drag and Drop or ',
+                                                html.A('Select Files')
+                                            ]),
+                                            style={
+                                                'width': '100%',
+                                                'height': '60px',
+                                                'lineHeight': '60px',
+                                                'borderWidth': '1px',
+                                                'borderStyle': 'dashed',
+                                                'borderRadius': '5px',
+                                                'textAlign': 'center',
+                                                'margin': '10px'
+                                            },
+                                            # Allow multiple files to be uploaded
+                                            multiple=False
+                                        ),
+                                        html.Div(
+                                            id='availability-file',
+                                            children = [
+                                        ]),                          
+                            ]),
                             html.Br(), 
-                            html.P('Upload your labor need below'),
-                            dcc.Upload(
-                                id='upload-labor-need',
-                                children=html.Div([
-                                    'Drag and Drop or ',
-                                    html.A('Select Files')
-                                ]),
-                                style={
-                                    'width': '100%',
-                                    'height': '60px',
-                                    'lineHeight': '60px',
-                                    'borderWidth': '1px',
-                                    'borderStyle': 'dashed',
-                                    'borderRadius': '5px',
-                                    'textAlign': 'center',
-                                    'margin': '10px'
-                                },
-                                # Allow multiple files to be uploaded
-                                multiple=False
-                            ),
+                            dcc.Markdown('**Upload your labor need below**'),
+                            dcc.Markdown('Format: *day_of_week, labor_need, hour*'),
+                            html.Div(id='upload3',
+                                     children = [
+                                        dcc.Upload(
+                                            id='upload-labor-need',
+                                            children=html.Div([
+                                                'Drag and Drop or ',
+                                                html.A('Select Files')
+                                            ]),
+                                            style={
+                                                'width': '100%',
+                                                'height': '60px',
+                                                'lineHeight': '60px',
+                                                'borderWidth': '1px',
+                                                'borderStyle': 'dashed',
+                                                'borderRadius': '5px',
+                                                'textAlign': 'center',
+                                                'margin': '10px'
+                                            },
+                                            # Allow multiple files to be uploaded
+                                            multiple=False
+                                        ),
+                                        html.Div(
+                                            id='laborneed-file',
+                                            children = [
+                                        ]),                        
+                            ]),
                         ]),
 
         ]),
@@ -410,6 +482,7 @@ app.layout = html.Div(
               [Input("tabs", "active_tab")],
               [State("optimization-output", "children")])
 def switch_tab(at, data):
+
     if at == "tab1":
         return gen_input_tab()
     elif at == "tab2":
@@ -423,6 +496,67 @@ def switch_tab(at, data):
 # =============================================================================
 # User action callbacks
 # =============================================================================
+# Send user inputs to the api and return optimized output   
+@app.callback(
+    [Output("employee-file", "children")],
+    [Input("upload-info", "filename")]
+)
+def employee_file(filename):
+    if filename is not None:
+        return [html.Div(
+                id="employee-file-logo",
+                children=[
+                    html.Img(id="file", src=app.get_asset_url("file.png")),
+                    html.P(filename)
+                ],
+            )]
+    else:
+        return [html.Div(
+                id="employee-file-logo",
+                children=[
+                ],
+            )]
+        
+@app.callback(
+    [Output("availability-file", "children")],
+    [Input("upload-availability", "filename")]
+)
+def availability_file(filename):
+    if filename is not None:
+        return [html.Div(
+                id="availability-file-logo",
+                children=[
+                    html.Img(id="file", src=app.get_asset_url("file.png")),
+                    html.P(filename)
+                ],
+            )]
+    else:
+        return [html.Div(
+                id="availability-file-logo",
+                children=[
+                ],
+            )]
+
+@app.callback(
+    [Output("laborneed-file", "children")],
+    [Input("upload-labor-need", "filename")]
+)
+def laborneed_file(filename):
+    if filename is not None:
+        return [html.Div(
+                id="laborneed-file-logo",
+                children=[
+                    html.Img(id="file", src=app.get_asset_url("file.png")),
+                    html.P(filename)
+                ],
+            )]
+    else:
+        return [html.Div(
+                id="laborneed-file-logo",
+                children=[
+                ],
+            )]
+
 def parse_contents(contents, filename):
     content_type, content_string = contents.split(',')
 
@@ -439,7 +573,8 @@ def parse_contents(contents, filename):
 
 # Send user inputs to the api and return optimized output   
 @app.callback(
-    [Output("optimization-output", "children")],
+    [Output("optimization-output", "children"),
+     Output("button-output", "children"),],
     [Input("submit-button", "n_clicks")],
     [State("schedule-date-range", "start_date"),
       State("schedule-date-range", "end_date"),
@@ -486,12 +621,12 @@ def submit(n_clicks, start_date, end_date, shift_lengths, open_hours,
         print(r.status_code)
         if r.status_code == 201:
             encoding = 'utf-8'
-            return [r.content.decode(encoding)]
+            return r.content.decode(encoding), [html.Img(id="optimized", src=app.get_asset_url("optimized.jpg"))]
         else:
             print(r.content)
-            return ['']
+            return [''], ['']
     else:
-        return []
+        return [], []
    
 # Send email to each of the employees with their schedule
 @app.callback(
@@ -505,6 +640,7 @@ def send_email(n_clicks, data, sender_email, password):
     print('in submit')
     if n_clicks > 0:
         data = json.loads(data)
+        data = data['output']
         data = pd.DataFrame.from_records(data)    
         
         port = 587  # For starttls

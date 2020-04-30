@@ -78,7 +78,7 @@ def min_func(x, shift_lengths, shift_starts, labor_req, labor_req_starts):
         shift_req = 0
         for j in shifts_in_labor_req[i]:
             shift_req = shift_req + x[j]
-        diffs.append(shift_req/labor_req[i])
+        diffs.append((abs(shift_req - labor_req[i])))
         
     return np.mean(diffs)
         
@@ -106,23 +106,40 @@ def build_constraints(shift_lengths, shift_starts, labor_req, labor_req_starts):
     for eq in constraints:
         cons = cons + ({'type': 'ineq', 'fun': eval(eq)},)
     
+    bnds = ()
     for i in range(len(shift_starts)):
         con = 'lambda x: x[' + str(i) + ']'
         cons = cons + ({'type': 'ineq', 'fun': eval(con)},)
+        bnds = bnds + ((0, None),)
 
-    return cons
-
+    return cons, bnds
 
 def gen_labor(shift_starts,  shift_lengths, labor_req, labor_req_starts):
 
-    cons = build_constraints(shift_lengths, shift_starts, labor_req, labor_req_starts)
+    cons, bnds = build_constraints(shift_lengths, shift_starts, labor_req, labor_req_starts)
     x = [np.mean(labor_req)] * len(shift_lengths)
-    res = minimize(min_func, x, args = (shift_lengths, shift_starts, labor_req, labor_req_starts), constraints=cons, method='SLSQP', options={'disp': False})
+    res = minimize(min_func, x, 
+                   args = (shift_lengths, shift_starts, labor_req, labor_req_starts), 
+                   constraints=cons, 
+                   method='SLSQP', 
+                   options={'disp': False})
     labor = np.array(np.round(res.x))
 
     return labor
 
+def product(*args):
+    if not args:
+        return iter(((),)) # yield tuple()
+    return (items + (item,) 
+            for items in product(*args[:-1]) for item in args[-1])
+
 def optimize_shifts(shifts_, labor_):
+    
+    dows = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    new = list(product(dows, list(range(1,25))))
+    index = pd.DataFrame(new, columns = ['day_of_week', 'hour'])
+    labor_ = labor_.merge(index, how = 'outer', on = ['day_of_week', 'hour'] )
+    labor_['labor_need'] = labor_['labor_need'].fillna(0)
     
     shift_starts = list(shifts_['start_hour'])
     shift_lengths = list(shifts_['end_hour'] - shifts_['start_hour'])
