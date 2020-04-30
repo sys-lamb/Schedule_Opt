@@ -69,7 +69,7 @@ def gen_comparison(df1):
     df = df[(df['hour'] < df['end_hour']) & (df['hour'] >= df['start_hour'])]
     df = df.drop(['key', 'start_hour', 'end_hour'], axis = 1)
     df = df.merge(df1[['shift', 'start']], how = 'left', on = 'shift')
-    df['start'] = df['start'].apply(lambda x: x[0:10]) 
+    df['start'] = df['start'].apply(lambda x: x[5:16]) 
     df['start'] = df['start'] + ' ' + df['hour'].astype(str) + ':00'
     df = df.drop_duplicates()
     
@@ -79,7 +79,8 @@ def gen_comparison(df1):
     df = df.merge(labor, how = 'outer', on = ['day_of_week', 'hour'])
     df['sort'] = pd.to_datetime(df['start'])
     df = df.sort_values('sort')
-    df.drop('sort', axis = 1, inplace = True)
+    df['req'] = df['labor_need']
+    df.drop(['labor_need', 'sort'], axis = 1, inplace = True)
 
     return df
 
