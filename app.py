@@ -27,6 +27,7 @@ import base64
 import smtplib, ssl
 from email.message import EmailMessage
 import re
+import urllib.parse
 
 def datetime_range(start, end, delta):
     current = start
@@ -83,6 +84,15 @@ def gen_comparison(df1):
     df.drop(['labor_need', 'sort'], axis = 1, inplace = True)
 
     return df
+
+def gen_download(test):
+    test = json.loads(test)
+    test = test['output']
+    df1 = pd.DataFrame.from_records(test).sort_values('start')
+    df1 = df1[['employee_name', 'employee_email', 'day_of_week', 'start', 'end', 'duration', 'shift_cost']].drop_duplicates()
+    csv_string = df1.to_csv(index=False, encoding='utf-8')
+    csv_string = "data:text/csv;charset=utf-8," + urllib.parse.quote(csv_string)
+    return csv_string
 
 # Generate total cost of the schedule
 def gen_total_cost(df1):
@@ -377,7 +387,7 @@ def gen_input_tab():
     ]
 
 # HTML layout for output tab
-def gen_output_tab(df, overage, total_cost):
+def gen_output_tab(df, overage, total_cost, csv_string):
 
     fig = go.Figure()
 
@@ -435,6 +445,17 @@ def gen_output_tab(df, overage, total_cost):
                                     )
                                 ])
                         ]),  
+                        html.Div(
+                            id='download-output',
+                            children = [
+                                    html.A(
+                                        'Download Schedules',
+                                        id='download-link',
+                                        download="optimized_schedules.csv",
+                                        href=csv_string,
+                                        target="_blank"
+                                    )
+                        ]), 
 
                 ]),
             ]
@@ -488,7 +509,8 @@ def switch_tab(at, data):
         df = gen_comparison(data)
         overage = gen_overage(data)
         total_cost = gen_total_cost(data)
-        return gen_output_tab(df, overage, total_cost)
+        csv_string = gen_download(data)
+        return gen_output_tab(df, overage, total_cost, csv_string)
     return html.P("This shouldn't ever be displayed...")
 
 # =============================================================================
@@ -678,6 +700,8 @@ def send_email(n_clicks, data, sender_email, password):
                 msg.set_content(message)
                 server.send_message(msg)
     return ['Emails sent!']
+
+
 
 # Running the app on the server
 if __name__ == "__main__":
