@@ -52,7 +52,7 @@ def optimize():
 
         # Create dataframes from json data passed
         open_closed = pd.DataFrame.from_records(data['open_closed']) \
-                                  .rename(columns = {'':'Type'}) 
+                                  .rename(columns = {'':'type'}) 
         employee_data = pd.DataFrame.from_records(data['employee_data']) 
         avail_data = pd.DataFrame.from_records(data['avail_data']) 
         labor = pd.DataFrame.from_records(data['labor'])

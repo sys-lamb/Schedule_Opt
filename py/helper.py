@@ -173,25 +173,40 @@ def optimize_shifts(shifts_, labor_):
     return shifts_
 
 def optimize_assignment(shifts_, avail_):
-    
+ 
+    pl.LpSolverDefault.msg = 1
     shift_reqs = list(shifts_['req'])
+    day_list = list(shifts_['day_of_week'])
     
     prob = pl.LpProblem("roster", pl.LpMinimize)
 
     cost = []
     vars_by_shift = cl.defaultdict(list)
-    vars_by_worker = cl.defaultdict(list) #max shifts
+    vars_by_worker = cl.defaultdict(list)
     
     for worker, info in avail_.items():
         for shift in info['pos_index']:
-            worker_var = pl.LpVariable("%s_%s" % (worker, shift), 0, 1, pl.LpInteger)
-            vars_by_shift[shift].append(worker_var)
+            worker_var = pl.LpVariable("%s_%d" % (worker, shift), 0, 1, pl.LpInteger)
+
+            var_data = (worker,)
+            vars_by_shift[shift].append((worker_var, var_data))
+            
+            var_data = (worker, day_list[int(shift)],)
+            vars_by_worker[worker].append((worker_var, var_data))
+
             cost.append(worker_var * (info['hourly_rate']* info['duration']))
-    
+       
+           
+    for worker, vars in vars_by_worker.items():
+        for day in list(set(day_list)):
+            single_day = [tup for tup in vars if tup[1][1] == day]
+            prob += sum([x[0] for x in single_day]) <= 1         
+
     prob += sum(cost)
     
     for shift, requirement in enumerate(shift_reqs):
-        prob += sum(vars_by_shift[shift]) >= requirement
+        prob += sum([var[0] for var in vars_by_shift[shift]]) >= requirement
+
     
     status = prob.solve()
     print("Result:", pl.LpStatus[status])
@@ -199,7 +214,7 @@ def optimize_assignment(shifts_, avail_):
     for shift, vars in vars_by_shift.items():
         results.append({
             "shift": shift,
-            "workers": [var.name for var in vars if var.varValue == 1],
+            "workers": [var[0].name for var in vars if var[0].varValue == 1],
         })
 
     return results

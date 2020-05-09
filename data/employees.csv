@@ -1,9 +1,6 @@
 ﻿employee_name,employee_email,hourly_rate,min_hours,max_hours
-a,swe3337a@gmail.com,10,32,60
-b,swe3337b@gmail.com,10,32,60
-c,swe3337c@gmail.com,12,32,60
-d,temp@gmail.com,12,32,60
-e,temp@gmail.com,10,32,60
-f,alexjlamb93@gmail.com,10,32,60
-g,alexjlamb93@gmail.com,12,32,60
-h,alexjlamb93@gmail.com,12,32,60
+asmith,swe3337a@gmail.com,10,32,60
+mscott,swe3337b@gmail.com,10,32,60
+eboykins,swe3337c@gmail.com,12,32,60
+bjones,swe3337d@gmail.com,12,32,60
+alamb,alexjlamb93@gmail.com,10,32,60
