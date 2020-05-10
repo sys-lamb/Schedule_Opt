@@ -16,7 +16,6 @@ import pandas as pd
 import json
 import numpy as np
 import requests
-os.chdir('/Users/alexlamb/Desktop/Schedule_Opt/py')
 from helper import (generate_shifts,
                     generate_availability,
                     gen_labor,
